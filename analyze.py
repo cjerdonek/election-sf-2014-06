@@ -219,33 +219,36 @@ def compute_extra_fields(precinct_totals):
         data['total_counted'] = subtotal('in_person_counted', 'vbm_counted')
         data['total_uncounted'] = subtotal('vbm_uncounted', 'provisional_uncounted')
 
-def make_nbhd_totals(precinct_to_nbhd, p_totals):
+def compute_nbhd_totals(nbhd_labels, precinct_to_nbhd, p_totals):
     """
-    Return a dict mapping neighborhood names to dicts of totals.
+    Return a dict mapping neighborhood labels to dicts of totals.
     """
-    nbhd_key = make_nbhd_key()
-
     # Initialize the neighborhood totals to zero.
     n_totals = {}
-    for name in nbhd_key.values():
-        n_totals[name] = dict.fromkeys(ALL_KEYS, 0)
+    for nbhd_label in nbhd_labels:
+        n_totals[nbhd_label] = dict.fromkeys(ALL_KEYS, 0)
 
     for precinct_id, p_data in p_totals.iteritems():
         nbhd_label = precinct_to_nbhd[precinct_id]
-        nbhd_name = nbhd_key[nbhd_label]
-        n_data = n_totals[nbhd_name]
+        n_data = n_totals[nbhd_label]
         for k in ALL_KEYS:
             n_data[k] += p_data[k]
 
     return n_totals
 
-def write_nbhd_totals(f, nbhd_totals):
-    w = csv.writer(f)
+def write_nbhd_totals(f, nbhd_key, nbhd_totals):
+    # The line terminator defaults to "\r\n".
+    w = csv.writer(f, lineterminator="\n")
     w.writerow(['Neighborhood'] + ALL_KEYS)
 
-    for nbhd in sorted(nbhd_totals.keys()):
-        data = nbhd_totals[nbhd]
-        w.writerow([nbhd] + [data[k] for k in ALL_KEYS])
+    # Invert the dictionary so we can iterate over names instead of labels.
+    nbhd_names_to_labels = {v:k for k, v in nbhd_key.items()}
+
+    # Order alphabetically by name.
+    for nbhd_name in sorted(nbhd_key.values()):
+        nbhd_label = nbhd_names_to_labels[nbhd_name]
+        data = nbhd_totals[nbhd_label]
+        w.writerow([nbhd_name] + [data[k] for k in ALL_KEYS])
 
     # Add a totals row.
     totals = []
@@ -272,10 +275,12 @@ def main():
 
     compute_extra_fields(precinct_totals)
 
+    nbhd_key = make_nbhd_key()
+
     # Aggregate precinct totals by neighborhood.
-    nbhd_totals = make_nbhd_totals(precinct_to_nbhd, precinct_totals)
+    nbhd_totals = compute_nbhd_totals(nbhd_key.keys(), precinct_to_nbhd, precinct_totals)
 
     with open('out.csv', 'wb') as f:
-        write_nbhd_totals(f, nbhd_totals)
+        write_nbhd_totals(f, nbhd_key, nbhd_totals)
 
 main()
